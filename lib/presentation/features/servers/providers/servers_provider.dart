@@ -1,12 +1,16 @@
+import 'dart:async';
+
 import 'package:dio/dio.dart';
 import 'package:riverpod_annotation/riverpod_annotation.dart';
 
 import '../../../../core/localization/locale_controller.dart';
 import '../../../../core/network/dio_client_provider.dart';
+import '../../../../core/widgets/ios_server_widget_bridge.dart';
 import '../../../../data/api/dashboard_api.dart';
 import '../../../../data/repositories_impl/server_repository_impl.dart';
 import '../../../../domain/entities/dashboard.dart';
 import '../../../../domain/entities/server.dart';
+import '../../../../domain/repositories/server_repository.dart';
 import '../../purchases/providers/purchase_provider.dart';
 import '../../settings/providers/app_settings_provider.dart';
 
@@ -19,8 +23,11 @@ part 'servers_provider.g.dart';
 @riverpod
 class ServersNotifier extends _$ServersNotifier {
   @override
-  FutureOr<List<Server>> build() {
-    return ref.watch(serverRepositoryProvider).list();
+  FutureOr<List<Server>> build() async {
+    final repo = ref.watch(serverRepositoryProvider);
+    final servers = await repo.list();
+    unawaited(_syncServerWidgetData(repo, servers));
+    return servers;
   }
 
   /// Probes authentication with candidate settings before adding a panel.
@@ -82,7 +89,9 @@ class ServersNotifier extends _$ServersNotifier {
         allowInsecureConnections: allowInsecureConnections,
         apiKey: apiKey,
       );
-      return repo.list();
+      final servers = await repo.list();
+      unawaited(_syncServerWidgetData(repo, servers));
+      return servers;
     });
   }
 
@@ -91,7 +100,10 @@ class ServersNotifier extends _$ServersNotifier {
     state = await AsyncValue.guard(() async {
       final repo = ref.read(serverRepositoryProvider);
       await repo.remove(id);
-      return repo.list();
+      final servers = await repo.list();
+      unawaited(IosServerWidgetBridge.removeServer(id));
+      unawaited(_syncServerWidgetData(repo, servers));
+      return servers;
     });
   }
 
@@ -125,7 +137,9 @@ class ServersNotifier extends _$ServersNotifier {
       );
       ref.invalidate(dioClientProvider(id));
       ref.invalidate(serverDashboardSnapshotProvider(id));
-      return repo.list();
+      final servers = await repo.list();
+      unawaited(_syncServerWidgetData(repo, servers));
+      return servers;
     });
   }
 
@@ -140,7 +154,31 @@ class ServersNotifier extends _$ServersNotifier {
       ]);
     }
     await repo.reorder(orderedIds);
-    state = await AsyncValue.guard(repo.list);
+    state = await AsyncValue.guard(() async {
+      final servers = await repo.list();
+      unawaited(_syncServerWidgetData(repo, servers));
+      return servers;
+    });
+  }
+
+  Future<void> _syncServerWidgetData(
+    ServerRepository repo,
+    List<Server> servers,
+  ) async {
+    final settings = await ref.read(appSettingsControllerProvider.future);
+    final apiKeys = <int, String>{};
+    for (final server in servers) {
+      final apiKey = await repo.getApiKey(server.id);
+      if (apiKey != null && apiKey.isNotEmpty) {
+        apiKeys[server.id] = apiKey;
+      }
+    }
+    await IosServerWidgetBridge.syncServers(
+      servers,
+      apiKeys: apiKeys,
+      requestTimeoutSeconds: settings.requestTimeoutSeconds,
+      customHeaders: settings.customHeaders,
+    );
   }
 }
 
@@ -159,8 +197,19 @@ final serverDashboardSnapshotProvider = FutureProvider.autoDispose
       final client = await ref.watch(dioClientProvider(serverId).future);
       final stopWatch = Stopwatch()..start();
       final dashboard = await DashboardApi(client).getDashboardSnapshot();
-      return ServerDashboardSnapshot(
+      final snapshot = ServerDashboardSnapshot(
         dashboard: dashboard,
         fetchMs: stopWatch.elapsedMilliseconds,
       );
+      final server = await ref.read(serverRepositoryProvider).find(serverId);
+      if (server != null) {
+        unawaited(
+          IosServerWidgetBridge.upsertSnapshot(
+            server: server,
+            dashboard: dashboard,
+            latencyMs: snapshot.fetchMs,
+          ),
+        );
+      }
+      return snapshot;
     });
