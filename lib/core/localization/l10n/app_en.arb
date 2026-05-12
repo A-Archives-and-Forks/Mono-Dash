@@ -5061,6 +5061,18 @@
   "@settings_appLock_widgetNote": {
     "description": "Footnote explaining app lock interaction with widgets."
   },
+  "settings_appLock_mischiefSectionTitle": "Mischief",
+  "@settings_appLock_mischiefSectionTitle": {
+    "description": "Settings section title for playful launch protection options."
+  },
+  "settings_appLock_misleadingPinFeedbackTitle": "Terrible PIN Feedback",
+  "@settings_appLock_misleadingPinFeedbackTitle": {
+    "description": "Settings row title for fake red/green PIN input feedback."
+  },
+  "settings_appLock_misleadingPinFeedbackSubtitle": "Random red and green hints while typing; the PIN is still checked only when you confirm.",
+  "@settings_appLock_misleadingPinFeedbackSubtitle": {
+    "description": "Settings row subtitle explaining fake PIN feedback does not validate each digit."
+  },
   "settings_appLock_setPinSheetTitle": "Set PIN",
   "@settings_appLock_setPinSheetTitle": {
     "description": "Bottom sheet title for setting an app lock PIN."

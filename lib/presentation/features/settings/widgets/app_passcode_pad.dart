@@ -18,6 +18,7 @@ class AppPasscodePad extends StatefulWidget {
     this.showLabel = true,
     this.topContent,
     this.errorTrigger = 0,
+    this.misleadingFeedbackEnabled = false,
   });
 
   final String value;
@@ -29,6 +30,7 @@ class AppPasscodePad extends StatefulWidget {
   final bool showLabel;
   final Widget? topContent;
   final int errorTrigger;
+  final bool misleadingFeedbackEnabled;
 
   @override
   State<AppPasscodePad> createState() => _AppPasscodePadState();
@@ -36,6 +38,9 @@ class AppPasscodePad extends StatefulWidget {
 
 class _AppPasscodePadState extends State<AppPasscodePad>
     with SingleTickerProviderStateMixin {
+  final math.Random _random = math.Random();
+  final List<bool> _misleadingGreenByIndex = [];
+
   late final AnimationController _errorController =
       AnimationController(
         vsync: this,
@@ -49,11 +54,37 @@ class _AppPasscodePadState extends State<AppPasscodePad>
   bool get _isShowingError => _errorController.isAnimating;
 
   @override
+  void initState() {
+    super.initState();
+    _syncMisleadingFeedback();
+  }
+
+  @override
   void didUpdateWidget(covariant AppPasscodePad oldWidget) {
     super.didUpdateWidget(oldWidget);
+    _syncMisleadingFeedback();
     if (widget.errorTrigger != oldWidget.errorTrigger &&
         widget.errorTrigger > 0) {
       _errorController.forward(from: 0);
+    }
+  }
+
+  void _syncMisleadingFeedback() {
+    if (!widget.misleadingFeedbackEnabled) {
+      _misleadingGreenByIndex.clear();
+    } else if (widget.value.length > _misleadingGreenByIndex.length) {
+      for (
+        var i = _misleadingGreenByIndex.length;
+        i < widget.value.length;
+        i++
+      ) {
+        _misleadingGreenByIndex.add(_random.nextInt(4) == 0);
+      }
+    } else if (widget.value.length < _misleadingGreenByIndex.length) {
+      _misleadingGreenByIndex.removeRange(
+        widget.value.length,
+        _misleadingGreenByIndex.length,
+      );
     }
   }
 
@@ -112,6 +143,8 @@ class _AppPasscodePadState extends State<AppPasscodePad>
                 value: widget.value,
                 maxLength: widget.maxLength,
                 isError: _isShowingError,
+                misleadingFeedbackEnabled: widget.misleadingFeedbackEnabled,
+                misleadingGreenByIndex: _misleadingGreenByIndex,
               ),
               const SizedBox(height: 34),
               _Keypad(
@@ -143,17 +176,23 @@ class _PasscodeDots extends StatelessWidget {
     required this.value,
     required this.maxLength,
     required this.isError,
+    required this.misleadingFeedbackEnabled,
+    required this.misleadingGreenByIndex,
   });
 
   final String value;
   final int maxLength;
   final bool isError;
+  final bool misleadingFeedbackEnabled;
+  final List<bool> misleadingGreenByIndex;
 
   @override
   Widget build(BuildContext context) {
     final filledColor = isError
         ? CupertinoColors.systemRed.resolveFrom(context)
         : CupertinoColors.activeBlue.resolveFrom(context);
+    final fakeCorrectColor = CupertinoColors.systemGreen.resolveFrom(context);
+    final fakeWrongColor = CupertinoColors.systemRed.resolveFrom(context);
     final emptyColor = isError
         ? CupertinoColors.systemRed.resolveFrom(context).withValues(alpha: 0.45)
         : AppColors.separator(context).withValues(alpha: 0.42);
@@ -162,6 +201,12 @@ class _PasscodeDots extends StatelessWidget {
       mainAxisAlignment: MainAxisAlignment.center,
       children: List.generate(maxLength, (index) {
         final filled = index < value.length;
+        final dotColor = filled && misleadingFeedbackEnabled && !isError
+            ? (misleadingGreenByIndex.length > index &&
+                      misleadingGreenByIndex[index]
+                  ? fakeCorrectColor
+                  : fakeWrongColor)
+            : filledColor;
         return AnimatedContainer(
           duration: const Duration(milliseconds: 120),
           curve: Curves.easeOut,
@@ -170,9 +215,9 @@ class _PasscodeDots extends StatelessWidget {
           margin: const EdgeInsets.symmetric(horizontal: 5),
           decoration: BoxDecoration(
             shape: BoxShape.circle,
-            color: filled ? filledColor : CupertinoColors.transparent,
+            color: filled ? dotColor : CupertinoColors.transparent,
             border: Border.all(
-              color: filled ? filledColor : emptyColor,
+              color: filled ? dotColor : emptyColor,
               width: filled ? 0 : 1.2,
             ),
           ),

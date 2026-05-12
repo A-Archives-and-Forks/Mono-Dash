@@ -18,6 +18,7 @@ class AppLockSettings {
     required this.biometricEnabled,
     required this.biometricAvailable,
     required this.hasPassword,
+    required this.misleadingPinFeedbackEnabled,
     this.availableBiometrics = const [],
   });
 
@@ -25,6 +26,7 @@ class AppLockSettings {
   final bool biometricEnabled;
   final bool biometricAvailable;
   final bool hasPassword;
+  final bool misleadingPinFeedbackEnabled;
   final List<BiometricType> availableBiometrics;
 
   AppLockSettings copyWith({
@@ -32,6 +34,7 @@ class AppLockSettings {
     bool? biometricEnabled,
     bool? biometricAvailable,
     bool? hasPassword,
+    bool? misleadingPinFeedbackEnabled,
     List<BiometricType>? availableBiometrics,
   }) {
     return AppLockSettings(
@@ -39,6 +42,8 @@ class AppLockSettings {
       biometricEnabled: biometricEnabled ?? this.biometricEnabled,
       biometricAvailable: biometricAvailable ?? this.biometricAvailable,
       hasPassword: hasPassword ?? this.hasPassword,
+      misleadingPinFeedbackEnabled:
+          misleadingPinFeedbackEnabled ?? this.misleadingPinFeedbackEnabled,
       availableBiometrics: availableBiometrics ?? this.availableBiometrics,
     );
   }
@@ -47,6 +52,8 @@ class AppLockSettings {
 class AppLockController extends AsyncNotifier<AppLockSettings> {
   static const _enabledKey = 'app_lock_enabled';
   static const _biometricEnabledKey = 'app_lock_biometric_enabled';
+  static const _misleadingPinFeedbackEnabledKey =
+      'app_lock_misleading_pin_feedback_enabled';
   static const _passwordHashKey = 'app_lock_password_hash';
   static const _passwordSaltKey = 'app_lock_password_salt';
 
@@ -130,6 +137,12 @@ class AppLockController extends AsyncNotifier<AppLockSettings> {
     state = AsyncValue.data(await _load());
   }
 
+  Future<void> setMisleadingPinFeedbackEnabled(bool enabled) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setBool(_misleadingPinFeedbackEnabledKey, enabled);
+    state = AsyncValue.data(await _load());
+  }
+
   Future<bool> verifyPassword(String password) async {
     final hash = await _secureStorage.read(key: _passwordHashKey);
     final salt = await _secureStorage.read(key: _passwordSaltKey);
@@ -166,12 +179,15 @@ class AppLockController extends AsyncNotifier<AppLockSettings> {
     final enabled = (prefs.getBool(_enabledKey) ?? false) && hasPassword;
     final biometricEnabled =
         (prefs.getBool(_biometricEnabledKey) ?? false) && biometricAvailable;
+    final misleadingPinFeedbackEnabled =
+        prefs.getBool(_misleadingPinFeedbackEnabledKey) ?? false;
 
     return AppLockSettings(
       enabled: enabled,
       biometricEnabled: biometricEnabled,
       biometricAvailable: biometricAvailable,
       hasPassword: hasPassword,
+      misleadingPinFeedbackEnabled: misleadingPinFeedbackEnabled,
       availableBiometrics: biometrics,
     );
   }

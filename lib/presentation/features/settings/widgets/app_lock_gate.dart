@@ -133,6 +133,8 @@ class _AppLockScreenState extends ConsumerState<_AppLockScreen> {
                     maxLength: 6,
                     showLabel: false,
                     errorTrigger: _pinErrorTrigger,
+                    misleadingFeedbackEnabled:
+                        settings?.misleadingPinFeedbackEnabled == true,
                     topContent: canUseBiometric
                         ? _BiometricScanButton(
                             icon: _biometricIcon(settings?.availableBiometrics),

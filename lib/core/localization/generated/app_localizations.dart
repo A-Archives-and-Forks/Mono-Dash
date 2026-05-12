@@ -6824,6 +6824,24 @@ abstract class AppLocalizations {
   /// **'Home screen widgets refresh independently. Launch protection only protects the main app and does not block widget timeline refreshes.'**
   String get settings_appLock_widgetNote;
 
+  /// Settings section title for playful launch protection options.
+  ///
+  /// In en, this message translates to:
+  /// **'Mischief'**
+  String get settings_appLock_mischiefSectionTitle;
+
+  /// Settings row title for fake red/green PIN input feedback.
+  ///
+  /// In en, this message translates to:
+  /// **'Terrible PIN Feedback'**
+  String get settings_appLock_misleadingPinFeedbackTitle;
+
+  /// Settings row subtitle explaining fake PIN feedback does not validate each digit.
+  ///
+  /// In en, this message translates to:
+  /// **'Random red and green hints while typing; the PIN is still checked only when you confirm.'**
+  String get settings_appLock_misleadingPinFeedbackSubtitle;
+
   /// Bottom sheet title for setting an app lock PIN.
   ///
   /// In en, this message translates to:

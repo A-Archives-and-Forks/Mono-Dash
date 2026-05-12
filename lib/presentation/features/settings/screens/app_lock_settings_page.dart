@@ -57,6 +57,8 @@ class _AppLockSettingsPageState extends ConsumerState<AppLockSettingsPage> {
             padding: const EdgeInsets.fromLTRB(16, 18, 16, 132),
             children: [
               _buildSecurityCard(settings),
+              const SizedBox(height: 12),
+              _buildMischiefCard(settings),
               const SizedBox(height: 14),
               Text(
                 l10n.settings_appLock_widgetNote,
@@ -70,6 +72,27 @@ class _AppLockSettingsPageState extends ConsumerState<AppLockSettingsPage> {
           ),
         ),
       ),
+    );
+  }
+
+  Widget _buildMischiefCard(AppLockSettings settings) {
+    final l10n = context.l10n;
+    return SubMenuCard(
+      title: l10n.settings_appLock_mischiefSectionTitle,
+      children: [
+        _SettingsLine(
+          icon: TablerIcons.mood_wink,
+          iconColor: CupertinoColors.systemGreen,
+          title: l10n.settings_appLock_misleadingPinFeedbackTitle,
+          subtitle: l10n.settings_appLock_misleadingPinFeedbackSubtitle,
+          trailing: CupertinoSwitch(
+            value: settings.misleadingPinFeedbackEnabled,
+            onChanged: (value) => ref
+                .read(appLockControllerProvider.notifier)
+                .setMisleadingPinFeedbackEnabled(value),
+          ),
+        ),
+      ],
     );
   }
 
@@ -236,6 +259,8 @@ class _SetPinSheetState extends ConsumerState<_SetPinSheet> {
           subtitle: subtitle,
           enabled: !_isSaving,
           maxLength: 6,
+          misleadingFeedbackEnabled:
+              widget.settings.misleadingPinFeedbackEnabled,
           onChanged: onChanged,
         ),
         _ErrorText(message: _errorText),
@@ -416,6 +441,8 @@ class _ChangePinSheetState extends ConsumerState<_ChangePinSheet> {
             },
             enabled: !_isSaving,
             maxLength: 6,
+            misleadingFeedbackEnabled:
+                widget.settings.misleadingPinFeedbackEnabled,
             onChanged: (value) => setState(() {
               switch (_step) {
                 case _ChangePinStep.current:
@@ -553,6 +580,7 @@ class _DisableLockSheetState extends ConsumerState<_DisableLockSheet> {
   @override
   Widget build(BuildContext context) {
     final l10n = context.l10n;
+    final settings = ref.watch(appLockControllerProvider).valueOrNull;
     return _PasscodeSheetScaffold(
       onCancel: _isSaving ? null : () => Navigator.of(context).pop(),
       child: Column(
@@ -564,6 +592,8 @@ class _DisableLockSheetState extends ConsumerState<_DisableLockSheet> {
             subtitle: l10n.settings_appLock_disableVerifySubtitle,
             enabled: !_isSaving,
             maxLength: 6,
+            misleadingFeedbackEnabled:
+                settings?.misleadingPinFeedbackEnabled == true,
             onChanged: (value) => setState(() {
               _pin = value;
               _errorText = null;

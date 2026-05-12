@@ -3698,6 +3698,17 @@ class AppLocalizationsEn extends AppLocalizations {
       'Home screen widgets refresh independently. Launch protection only protects the main app and does not block widget timeline refreshes.';
 
   @override
+  String get settings_appLock_mischiefSectionTitle => 'Mischief';
+
+  @override
+  String get settings_appLock_misleadingPinFeedbackTitle =>
+      'Terrible PIN Feedback';
+
+  @override
+  String get settings_appLock_misleadingPinFeedbackSubtitle =>
+      'Random red and green hints while typing; the PIN is still checked only when you confirm.';
+
+  @override
   String get settings_appLock_setPinSheetTitle => 'Set PIN';
 
   @override

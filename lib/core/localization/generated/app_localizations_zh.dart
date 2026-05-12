@@ -3595,6 +3595,16 @@ class AppLocalizationsZh extends AppLocalizations {
       '桌面小组件会独立刷新。启动保护只保护主应用入口，不会阻止小组件时间线刷新。';
 
   @override
+  String get settings_appLock_mischiefSectionTitle => '无聊设置';
+
+  @override
+  String get settings_appLock_misleadingPinFeedbackTitle => '糟糕密码反馈';
+
+  @override
+  String get settings_appLock_misleadingPinFeedbackSubtitle =>
+      '输入时随机显示红绿提示，真实校验只在确认时进行。';
+
+  @override
   String get settings_appLock_setPinSheetTitle => '设置密码';
 
   @override
