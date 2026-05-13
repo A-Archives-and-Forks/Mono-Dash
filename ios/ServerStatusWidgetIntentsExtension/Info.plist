@@ -27,6 +27,7 @@
 			<key>IntentsSupported</key>
 			<array>
 				<string>SelectServerIntent</string>
+				<string>SelectServerOverviewIntent</string>
 			</array>
 		</dict>
 		<key>NSExtensionPointIdentifier</key>

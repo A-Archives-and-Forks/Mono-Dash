@@ -27,6 +27,7 @@
 "widget.empty.subtitle" = "Add a server in Mono Dash.";
 "widget.metric.memory" = "MEM";
 "widget.metric.disk" = "DISK";
+"widget.metric.latency" = "LATENCY";
 "widget.traffic.up" = "Up";
 "widget.traffic.down" = "Down";
 "widget.traffic.total" = "Total";
@@ -46,6 +47,9 @@
 "widget.display.name.overview" = "Mono Dash Overview";
 "widget.display.description.overview" = "Summarize multiple server controllers in one widget.";
 "widget.overview.title" = "Server Overview";
+"widget.overview.max_cpu" = "Max CPU";
+"widget.overview.max_memory" = "Max MEM";
+"widget.overview.max_disk" = "Max DISK";
 "widget.overview.online_count" = "%d/%d online";
 "widget.overview.summary" = "%d warnings · %d offline";
 "widget.overview.more" = "+%d more";

@@ -3,7 +3,7 @@ import Intents
 private let appGroupId = "group.cc.boring-lab.monodash"
 private let serversKey = "server_widget_servers"
 
-final class IntentHandler: INExtension, SelectServerIntentHandling {
+final class IntentHandler: INExtension, SelectServerIntentHandling, SelectServerOverviewIntentHandling {
   override func handler(for intent: INIntent) -> Any {
     self
   }
@@ -17,6 +17,39 @@ final class IntentHandler: INExtension, SelectServerIntentHandling {
 
   func defaultServer(for intent: SelectServerIntent) -> ServerIntentItem? {
     serverItems(matching: nil).first
+  }
+
+  func provideServer1OptionsCollection(
+    for intent: SelectServerOverviewIntent,
+    searchTerm: String?
+  ) async throws -> INObjectCollection<ServerIntentItem> {
+    INObjectCollection(items: serverItems(matching: searchTerm))
+  }
+
+  func provideServer2OptionsCollection(
+    for intent: SelectServerOverviewIntent,
+    searchTerm: String?
+  ) async throws -> INObjectCollection<ServerIntentItem> {
+    INObjectCollection(items: serverItems(matching: searchTerm))
+  }
+
+  func provideServer3OptionsCollection(
+    for intent: SelectServerOverviewIntent,
+    searchTerm: String?
+  ) async throws -> INObjectCollection<ServerIntentItem> {
+    INObjectCollection(items: serverItems(matching: searchTerm))
+  }
+
+  func defaultServer1(for intent: SelectServerOverviewIntent) -> ServerIntentItem? {
+    serverItems(matching: nil).first
+  }
+
+  func defaultServer2(for intent: SelectServerOverviewIntent) -> ServerIntentItem? {
+    serverItems(matching: nil).dropFirst().first
+  }
+
+  func defaultServer3(for intent: SelectServerOverviewIntent) -> ServerIntentItem? {
+    serverItems(matching: nil).dropFirst(2).first
   }
 
   private func serverItems(matching searchTerm: String?) -> [ServerIntentItem] {

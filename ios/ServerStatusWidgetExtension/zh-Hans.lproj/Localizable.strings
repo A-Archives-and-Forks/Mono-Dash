@@ -27,6 +27,7 @@
 "widget.empty.subtitle" = "在 Mono Dash 中添加服务器。";
 "widget.metric.memory" = "内存";
 "widget.metric.disk" = "磁盘";
+"widget.metric.latency" = "延迟";
 "widget.traffic.up" = "上传";
 "widget.traffic.down" = "下载";
 "widget.traffic.total" = "总计";
@@ -46,6 +47,9 @@
 "widget.display.name.overview" = "Mono Dash 总览";
 "widget.display.description.overview" = "在一个小组件中汇总多个控制器的运行状态。";
 "widget.overview.title" = "控制器总览";
+"widget.overview.max_cpu" = "最高 CPU";
+"widget.overview.max_memory" = "最高内存";
+"widget.overview.max_disk" = "最高磁盘";
 "widget.overview.online_count" = "%d/%d 在线";
 "widget.overview.summary" = "%d 警告 · %d 离线";
 "widget.overview.more" = "+%d 更多";

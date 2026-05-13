@@ -49,6 +49,17 @@ class MyApp extends ConsumerWidget {
         settingsAsync.valueOrNull?.appearanceMode ?? AppAppearanceMode.system;
     final appIconVariant =
         settingsAsync.valueOrNull?.appIconVariant ?? AppIconVariant.defaultIcon;
+    final effectiveBrightness = switch (appearanceMode) {
+      AppAppearanceMode.system =>
+        WidgetsBinding.instance.platformDispatcher.platformBrightness,
+      AppAppearanceMode.light => Brightness.light,
+      AppAppearanceMode.dark => Brightness.dark,
+    };
+    unawaited(
+      IosServerWidgetBridge.syncAppIcon(
+        appIconVariant.effectiveAlternateIconName(effectiveBrightness),
+      ),
+    );
 
     return _AppIconAutoSync(
       enabled: settingsAsync.hasValue,

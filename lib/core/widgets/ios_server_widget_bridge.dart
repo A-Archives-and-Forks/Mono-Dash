@@ -50,6 +50,13 @@ class IosServerWidgetBridge {
     });
   }
 
+  static Future<void> syncAppIcon(String? appIconName) async {
+    if (!_isAvailable) return;
+    await _invoke('syncSettings', {
+      'settings': {'appIconName': appIconName ?? ''},
+    });
+  }
+
   static Future<void> upsertSnapshot({
     required Server server,
     required Dashboard dashboard,

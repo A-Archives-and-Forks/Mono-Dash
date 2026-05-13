@@ -17,6 +17,7 @@ private let skipNextFetchServerIdsKey = "server_widget_skip_next_fetch_server_id
 private let simpleWidgetKind = "ServerStatusWidget"
 private let horizontalMetricsWidgetKind = "ServerStatusWidgetHorizontalMetrics"
 private let overviewWidgetKind = "ServerOverviewWidget"
+private let maxOverviewServerCount = 3
 private let serverWidgetKinds = [
   simpleWidgetKind,
   horizontalMetricsWidgetKind,
@@ -117,12 +118,14 @@ struct WidgetSettings: Codable {
   let customHeaders: [String: String]
   let userAgent: String?
   let appLocaleCode: String?
+  let appIconName: String?
 
   static let fallback = WidgetSettings(
     requestTimeoutSeconds: 60,
     customHeaders: [:],
     userAgent: nil,
-    appLocaleCode: nil
+    appLocaleCode: nil,
+    appIconName: nil
   )
 }
 
@@ -698,7 +701,10 @@ struct ServerOverviewSelectionIntent: WidgetConfigurationIntent {
   static var title = LocalizedStringResource("widget.intent.overview.title")
   static var description = IntentDescription("widget.intent.overview.description")
 
-  @Parameter(title: "widget.intent.servers.parameter")
+  @Parameter(
+    title: "widget.intent.servers.parameter",
+    size: IntentCollectionSize(min: 0, max: 3)
+  )
   var servers: [ServerEntity]?
 
   @Parameter(title: "widget.intent.language.parameter", default: .followApp)
@@ -725,6 +731,38 @@ struct RefreshServerIntent: AppIntent {
       _ = await ServerWidgetFetcher.fetch(server: server)
       reloadServerWidgetTimelines()
     }
+    return .result()
+  }
+}
+
+@available(iOSApplicationExtension 17.0, *)
+struct RefreshServerOverviewIntent: AppIntent {
+  static var title = LocalizedStringResource("widget.intent.refresh.title")
+
+  @Parameter(title: "widget.intent.refresh.server_id")
+  var serverIds: [String]
+
+  init() {
+    serverIds = []
+  }
+
+  init(serverIds: [String]) {
+    self.serverIds = serverIds
+  }
+
+  func perform() async throws -> some IntentResult {
+    let ids = Set(serverIds)
+    let servers = WidgetStore.servers().filter { server in
+      ids.isEmpty || ids.contains(String(server.id))
+    }
+    await withTaskGroup(of: Void.self) { group in
+      for server in servers {
+        group.addTask {
+          _ = await ServerWidgetFetcher.fetch(server: server)
+        }
+      }
+    }
+    reloadServerWidgetTimelines()
     return .result()
   }
 }
@@ -1694,8 +1732,103 @@ struct ServerOverviewProvider: AppIntentTimelineProvider {
   ) -> [WidgetServer] {
     let servers = WidgetStore.servers()
     let ids = Set((configuration.servers ?? []).map(\.id))
-    guard !ids.isEmpty else { return servers }
-    return servers.filter { ids.contains(String($0.id)) }
+    let selected = ids.isEmpty
+      ? servers
+      : servers.filter { ids.contains(String($0.id)) }
+    return Array(selected.prefix(maxOverviewServerCount))
+  }
+}
+
+struct LegacyServerOverviewProvider: IntentTimelineProvider {
+  func placeholder(in context: Context) -> ServerOverviewEntry {
+    placeholderServerOverviewEntry()
+  }
+
+  func getSnapshot(
+    for configuration: SelectServerOverviewIntent,
+    in context: Context,
+    completion: @escaping (ServerOverviewEntry) -> Void
+  ) {
+    Task {
+      completion(await entry(for: configuration, context: context, shouldFetch: !context.isPreview))
+    }
+  }
+
+  func getTimeline(
+    for configuration: SelectServerOverviewIntent,
+    in context: Context,
+    completion: @escaping (Timeline<ServerOverviewEntry>) -> Void
+  ) {
+    Task {
+      let entry = await entry(for: configuration, context: context, shouldFetch: true)
+      completion(Timeline(entries: [entry], policy: .after(Date().addingTimeInterval(900))))
+    }
+  }
+
+  private func entry(
+    for configuration: SelectServerOverviewIntent,
+    context: Context,
+    shouldFetch: Bool
+  ) async -> ServerOverviewEntry {
+    let servers = selectedServers(for: configuration)
+    var snapshots = WidgetStore.snapshots()
+
+    if shouldFetch {
+      await withTaskGroup(of: ServerSnapshot?.self) { group in
+        for server in servers {
+          group.addTask {
+            await ServerWidgetFetcher.fetch(server: server)
+          }
+        }
+
+        for await snapshot in group {
+          if let snapshot {
+            snapshots[String(snapshot.id)] = snapshot
+          }
+        }
+      }
+    }
+
+    let items = servers.map { server in
+      ServerOverviewItem(
+        server: server,
+        snapshot: snapshots[String(server.id)],
+        errorMessage: WidgetStore.selectedError(id: String(server.id))
+      )
+    }
+    .sorted { lhs, rhs in
+      if lhs.sortRank != rhs.sortRank {
+        return lhs.sortRank < rhs.sortRank
+      }
+      return lhs.server.sortIndex < rhs.server.sortIndex
+    }
+
+    return ServerOverviewEntry(
+      date: Date(),
+      items: items,
+      selectedCount: servers.count,
+      languageCode: WidgetStore.settings().appLocaleCode
+    )
+  }
+
+  private func selectedServers(for configuration: SelectServerOverviewIntent) -> [WidgetServer] {
+    let servers = WidgetStore.servers()
+    let ids = [
+      configuration.server1?.identifier,
+      configuration.server2?.identifier,
+      configuration.server3?.identifier
+    ].compactMap { $0 }
+
+    guard !ids.isEmpty else {
+      return Array(servers.prefix(maxOverviewServerCount))
+    }
+
+    var seen = Set<String>()
+    let uniqueIds = ids.filter { seen.insert($0).inserted }
+    let selected = uniqueIds.compactMap { id in
+      servers.first { String($0.id) == id }
+    }
+    return Array(selected.prefix(maxOverviewServerCount))
   }
 }
 
@@ -1714,7 +1847,7 @@ struct ServerOverviewWidgetEntryView: View {
       } else if family == .systemSmall {
         smallOverviewCard
       } else {
-        listOverviewCard(limit: family == .systemLarge ? 8 : 4)
+        listOverviewCard(limit: maxOverviewServerCount)
       }
     }
     .serverWidgetBackground()
@@ -1725,9 +1858,9 @@ struct ServerOverviewWidgetEntryView: View {
       overviewHeader(compact: true)
 
       VStack(spacing: 7) {
-        summaryMetric(label: "CPU", value: maxCpu)
-        summaryMetric(label: strings.string("widget.metric.memory"), value: maxMemory)
-        summaryMetric(label: strings.string("widget.metric.disk"), value: maxDisk)
+        summaryMetric(label: strings.string("widget.overview.max_cpu"), value: maxCpu)
+        summaryMetric(label: strings.string("widget.overview.max_memory"), value: maxMemory)
+        summaryMetric(label: strings.string("widget.overview.max_disk"), value: maxDisk)
       }
 
       Divider()
@@ -1747,30 +1880,39 @@ struct ServerOverviewWidgetEntryView: View {
   private func listOverviewCard(limit: Int) -> some View {
     let visibleItems = Array(entry.items.prefix(limit))
     let hiddenCount = max(entry.items.count - visibleItems.count, 0)
+    let showsInlineFooter = family == .systemMedium && visibleItems.count >= maxOverviewServerCount
 
-    return VStack(alignment: .leading, spacing: family == .systemLarge ? 9 : 7) {
-      overviewHeader(compact: false)
+    return VStack(alignment: .leading, spacing: family == .systemLarge ? 9 : 6) {
+      overviewHeader(compact: false, showsInlineStatus: showsInlineFooter)
+      overviewHeaderDivider
 
       if family == .systemLarge {
         HStack(spacing: 8) {
-          summaryChip(label: "CPU", value: maxCpu)
-          summaryChip(label: strings.string("widget.metric.memory"), value: maxMemory)
-          summaryChip(label: strings.string("widget.metric.disk"), value: maxDisk)
+          summaryChip(label: strings.string("widget.overview.max_cpu"), value: maxCpu)
+          summaryChip(label: strings.string("widget.overview.max_memory"), value: maxMemory)
+          summaryChip(label: strings.string("widget.overview.max_disk"), value: maxDisk)
         }
       }
 
-      VStack(spacing: family == .systemLarge ? 7 : 5) {
-        ForEach(visibleItems) { item in
+      VStack(spacing: 0) {
+        ForEach(Array(visibleItems.enumerated()), id: \.element.id) { index, item in
           overviewRow(item)
+          if index < visibleItems.count - 1 {
+            Divider()
+              .padding(.leading, family == .systemLarge ? 32 : 28)
+              .padding(.vertical, family == .systemLarge ? 5 : 4)
+          }
         }
       }
 
       Spacer(minLength: 0)
 
-      footer(hiddenCount: hiddenCount)
+      if !showsInlineFooter {
+        footer(hiddenCount: hiddenCount)
+      }
     }
     .padding(.horizontal, 16)
-    .padding(.top, 15)
+    .padding(.top, 14)
     .padding(.bottom, 13)
     .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .center)
   }
@@ -1790,92 +1932,125 @@ struct ServerOverviewWidgetEntryView: View {
     .padding(16)
   }
 
-  private func overviewHeader(compact: Bool) -> some View {
+  private func overviewHeader(compact: Bool, showsInlineStatus: Bool = false) -> some View {
     HStack(spacing: 8) {
-      Image(systemName: "server.rack")
-        .font(.system(size: compact ? 16 : 18, weight: .bold))
-        .foregroundStyle(.blue)
-
-      VStack(alignment: .leading, spacing: 1) {
-        Text(strings.string("widget.overview.title"))
-          .font(.system(size: compact ? 13 : 15, weight: .bold, design: .rounded))
-          .lineLimit(1)
-        Text(strings.format("widget.overview.online_count", onlineCount, entry.selectedCount))
-          .font(.caption2.weight(.semibold))
-          .foregroundStyle(.secondary)
-          .numericTextTransition()
-          .lineLimit(1)
+      if compact {
+        appIcon(size: 24)
       }
 
+      Text(strings.string("widget.overview.title"))
+        .font(.system(size: compact ? 13 : 16, weight: .bold, design: .rounded))
+        .lineLimit(1)
+
       Spacer(minLength: 0)
+
+      if showsInlineStatus {
+        overviewSummaryText
+      }
+
+      overviewRefreshButton(size: compact ? 24 : 28, iconSize: compact ? 11 : 13)
     }
   }
 
+  private var overviewHeaderDivider: some View {
+    Divider()
+      .opacity(0.45)
+  }
+
+  private func appIcon(size: CGFloat) -> some View {
+    Image(appIconAssetName)
+      .resizable()
+      .scaledToFit()
+      .frame(width: size, height: size)
+      .clipShape(RoundedRectangle(cornerRadius: size * 0.22, style: .continuous))
+  }
+
+  private var appIconAssetName: String {
+    WidgetStore.settings().appIconName == "icon_dark"
+      ? "MonoDashAppIconDark"
+      : "MonoDashAppIconLight"
+  }
+
+  @ViewBuilder
+  private func overviewRefreshButton(size: CGFloat, iconSize: CGFloat) -> some View {
+    if #available(iOSApplicationExtension 17.0, *) {
+      Button(
+        intent: RefreshServerOverviewIntent(
+          serverIds: entry.items.map { String($0.server.id) }
+        )
+      ) {
+        Image(systemName: "arrow.clockwise")
+          .font(.system(size: iconSize, weight: .semibold))
+          .foregroundStyle(.secondary.opacity(0.72))
+          .frame(width: size, height: size)
+          .contentShape(Rectangle())
+      }
+      .buttonStyle(.plain)
+    }
+  }
+
+  private func osIcon(_ value: String, size: CGFloat) -> some View {
+    Image(osAssetName(value))
+      .resizable()
+      .scaledToFit()
+      .frame(width: size, height: size)
+  }
+
+  private func osAssetName(_ value: String) -> String {
+    let source = value.lowercased()
+    if source.contains("ubuntu") { return "Ubuntu" }
+    if source.contains("debian") { return "Debian" }
+    if source.contains("centos") { return "CentOS" }
+    if source.contains("fedora") { return "Fedora" }
+    if source.contains("arch") { return "Arch Linux" }
+    if source.contains("suse") { return "openSUSE" }
+    return "Linux"
+  }
+
   private func overviewRow(_ item: ServerOverviewItem) -> some View {
-    HStack(spacing: 8) {
-      Circle()
-        .fill(item.status.tint)
-        .frame(width: 7, height: 7)
+    HStack(spacing: family == .systemLarge ? 9 : 8) {
+      osIcon(item.snapshot?.osName ?? item.server.displayName, size: family == .systemLarge ? 21 : 20)
+        .opacity(item.status == .failed ? 0.48 : 1)
 
       VStack(alignment: .leading, spacing: 2) {
         Text(item.snapshot?.title ?? item.server.title)
-          .font(.caption.weight(.bold))
+          .font(.system(size: family == .systemLarge ? 14.5 : 14, weight: .bold, design: .rounded))
           .lineLimit(1)
           .minimumScaleFactor(0.78)
 
         Text(rowSubtitle(item))
-          .font(.system(size: 10, weight: .medium, design: .rounded))
+          .font(.system(size: family == .systemLarge ? 12 : 11.5, weight: .semibold, design: .rounded))
           .foregroundStyle(.secondary)
           .lineLimit(1)
           .minimumScaleFactor(0.74)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
 
-      rowMetric(label: "CPU", value: item.snapshot?.cpuPercent)
-      rowMetric(label: strings.string("widget.metric.memory"), value: item.snapshot?.memoryPercent)
-
-      if family == .systemLarge {
-        rowMetric(label: strings.string("widget.metric.disk"), value: item.snapshot?.diskPercent)
-      }
-
-      Text(latencyText(item))
-        .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
-        .foregroundStyle(item.status == .failed ? .red : .secondary)
-        .numericTextTransition()
-        .frame(width: family == .systemLarge ? 44 : 38, alignment: .trailing)
-        .lineLimit(1)
-        .minimumScaleFactor(0.72)
+      rowMetric(label: "CPU", value: item.snapshot?.cpuPercent, width: family == .systemLarge ? 49 : 44)
+      rowMetric(label: strings.string("widget.metric.memory"), value: item.snapshot?.memoryPercent, width: family == .systemLarge ? 49 : 44)
+      rowMetric(label: strings.string("widget.metric.disk"), value: item.snapshot?.diskPercent, width: family == .systemLarge ? 49 : 44)
     }
-    .frame(height: family == .systemLarge ? 24 : 22)
+    .frame(height: family == .systemLarge ? 31 : 30)
   }
 
-  private func rowMetric(label: String, value: Double?) -> some View {
+  private func rowMetric(label: String, value: Double?, width: CGFloat) -> some View {
     VStack(alignment: .trailing, spacing: 1) {
       Text(label)
-        .font(.system(size: 8, weight: .bold, design: .rounded))
+        .font(.system(size: family == .systemLarge ? 9.5 : 9, weight: .bold, design: .rounded))
         .foregroundStyle(.secondary)
         .lineLimit(1)
       Text(value.map(percent) ?? "--")
-        .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
+        .font(.system(size: family == .systemLarge ? 12 : 11.5, weight: .bold, design: .rounded).monospacedDigit())
         .foregroundStyle(value.map(usageColor) ?? .secondary)
         .numericTextTransition()
         .lineLimit(1)
     }
-    .frame(width: family == .systemLarge ? 42 : 36, alignment: .trailing)
+    .frame(width: width, alignment: .trailing)
   }
 
   private func footer(hiddenCount: Int) -> some View {
     HStack(spacing: 8) {
-      Text(
-        strings.format(
-          "widget.overview.summary",
-          warningCount,
-          failedCount
-        )
-      )
-      .font(.caption2.weight(.semibold))
-      .foregroundStyle(.secondary)
-      .lineLimit(1)
+      overviewSummaryText
 
       Spacer(minLength: 0)
 
@@ -1889,12 +2064,26 @@ struct ServerOverviewWidgetEntryView: View {
     .minimumScaleFactor(0.75)
   }
 
+  private var overviewSummaryText: some View {
+    Text(
+      strings.format(
+        "widget.overview.summary",
+        warningCount,
+        failedCount
+      )
+    )
+    .font(.caption2.weight(.semibold))
+    .foregroundStyle(.secondary)
+    .lineLimit(1)
+    .minimumScaleFactor(0.75)
+  }
+
   private func summaryMetric(label: String, value: Double?) -> some View {
     HStack(spacing: 6) {
       Text(label)
         .font(.system(size: 10, weight: .bold, design: .rounded))
         .foregroundStyle(.secondary)
-        .frame(width: 30, alignment: .leading)
+        .frame(width: 54, alignment: .leading)
 
       GeometryReader { proxy in
         ZStack(alignment: .leading) {
@@ -1909,7 +2098,7 @@ struct ServerOverviewWidgetEntryView: View {
       Text(value.map(percent) ?? "--")
         .font(.system(size: 10, weight: .bold, design: .rounded).monospacedDigit())
         .numericTextTransition()
-        .frame(width: 34, alignment: .trailing)
+        .frame(width: 36, alignment: .trailing)
     }
     .frame(height: 11)
   }
@@ -1943,18 +2132,11 @@ struct ServerOverviewWidgetEntryView: View {
   }
 
   private func rowSubtitle(_ item: ServerOverviewItem) -> String {
-    if item.snapshot == nil {
+    guard let snapshot = item.snapshot else {
       return item.errorMessage ?? strings.string("widget.fallback.waiting")
     }
-    let os = item.snapshot?.osName.isEmpty == false ? item.snapshot!.osName : item.server.host
-    let uptime = formatUptime(item.snapshot?.uptimeSeconds ?? 0)
-    return uptime.isEmpty ? os : "\(os) · \(uptime)"
-  }
-
-  private func latencyText(_ item: ServerOverviewItem) -> String {
-    if item.status == .failed { return strings.string("widget.status.unknown") }
-    guard let snapshot = item.snapshot else { return "--" }
-    return "\(snapshot.latencyMs)ms"
+    let uptime = snapshot.uptimeSeconds.map(formatUptime) ?? ""
+    return uptime.isEmpty ? strings.string("widget.status.unknown") : uptime
   }
 
   private func statusLabel(_ status: ServerOverviewStatus, count: Int) -> String {
@@ -1971,7 +2153,7 @@ struct ServerOverviewWidgetEntryView: View {
   }
 
   private var onlineCount: Int {
-    entry.items.filter { $0.status == .online }.count
+    entry.items.filter { $0.snapshot != nil && $0.errorMessage == nil }.count
   }
 
   private var warningCount: Int {
@@ -2115,6 +2297,24 @@ struct LegacyServerStatusHorizontalMetricsWidget: Widget {
   }
 }
 
+@available(iOSApplicationExtension, introduced: 16.0, obsoleted: 17.0)
+struct LegacyServerOverviewWidget: Widget {
+  let kind = overviewWidgetKind
+
+  var body: some WidgetConfiguration {
+    IntentConfiguration(
+      kind: kind,
+      intent: SelectServerOverviewIntent.self,
+      provider: LegacyServerOverviewProvider()
+    ) { entry in
+      ServerOverviewWidgetEntryView(entry: entry)
+    }
+    .configurationDisplayName("widget.display.name.overview")
+    .description("widget.display.description.overview")
+    .supportedFamilies([.systemSmall, .systemMedium, .systemLarge])
+  }
+}
+
 @main
 struct ServerStatusWidgetBundle: WidgetBundle {
   var body: some Widget {
@@ -2125,6 +2325,7 @@ struct ServerStatusWidgetBundle: WidgetBundle {
     }
     LegacyServerStatusWidget()
     LegacyServerStatusHorizontalMetricsWidget()
+    LegacyServerOverviewWidget()
     if #available(iOSApplicationExtension 16.1, *) {
       FileTransferActivityWidget()
     }
