@@ -46,24 +46,30 @@ class RevenueCatConfig {
   }
 }
 
+enum PurchaseVerificationStatus { localOnly, verified, unverified, unavailable }
+
 class PurchaseState {
   const PurchaseState({
     required this.isConfigured,
     required this.isUnlocked,
     required this.freeServerLimit,
     required this.entitlementId,
+    required this.verificationStatus,
     this.priceText,
     this.hasPackage = false,
     this.message,
+    this.lastVerifiedAt,
   });
 
   final bool isConfigured;
   final bool isUnlocked;
   final int freeServerLimit;
   final String entitlementId;
+  final PurchaseVerificationStatus verificationStatus;
   final String? priceText;
   final bool hasPackage;
   final String? message;
+  final DateTime? lastVerifiedAt;
 
   bool canAddServer(int serverCount) {
     if (RevenueCatConfig.bypassServerLimitCheck) return true;
@@ -75,18 +81,24 @@ class PurchaseState {
     bool? isUnlocked,
     int? freeServerLimit,
     String? entitlementId,
+    PurchaseVerificationStatus? verificationStatus,
     String? priceText,
     bool? hasPackage,
     String? message,
+    DateTime? lastVerifiedAt,
+    bool clearPriceText = false,
+    bool clearMessage = false,
   }) {
     return PurchaseState(
       isConfigured: isConfigured ?? this.isConfigured,
       isUnlocked: isUnlocked ?? this.isUnlocked,
       freeServerLimit: freeServerLimit ?? this.freeServerLimit,
       entitlementId: entitlementId ?? this.entitlementId,
-      priceText: priceText ?? this.priceText,
+      verificationStatus: verificationStatus ?? this.verificationStatus,
+      priceText: clearPriceText ? null : priceText ?? this.priceText,
       hasPackage: hasPackage ?? this.hasPackage,
-      message: message ?? this.message,
+      message: clearMessage ? null : message ?? this.message,
+      lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
     );
   }
 }
@@ -118,88 +130,202 @@ class PurchaseUnavailableException implements Exception {
 class PurchaseController extends AsyncNotifier<PurchaseState> {
   static const _tag = 'purchase';
   static const _localUnlockKey = 'purchase.unlimited_servers.unlocked';
+  static const _legacyLocalUnlockKey = _localUnlockKey;
+  static const _lastVerifiedAtKey =
+      'purchase.unlimited_servers.last_verified_at';
+  static const _entitlementRefreshInterval = Duration(hours: 24);
+  static const _offeringsRefreshInterval = Duration(minutes: 15);
   static const _revenueCatReadTimeout = Duration(seconds: 12);
   static bool _configured = false;
+  static Future<void>? _configureFuture;
+
+  rc.Package? _cachedPackage;
+  DateTime? _lastOfferingsAttemptAt;
+  Future<PurchaseState>? _entitlementRefreshFuture;
+  Future<PurchaseState>? _offeringsFuture;
 
   @override
-  Future<PurchaseState> build() => _loadInitialState();
+  Future<PurchaseState> build() => _loadLocalState();
 
-  static bool isLocallyUnlocked(WidgetRef ref) {
-    return ref.read(storageServiceProvider).getString(_localUnlockKey) ==
-        'true';
+  static Future<bool> isLocallyUnlocked(WidgetRef ref) async {
+    return (await ref.read(purchaseControllerProvider.future)).isUnlocked;
   }
 
-  Future<PurchaseState> _loadInitialState() async {
+  Future<PurchaseState> _loadLocalState() async {
+    final storage = ref.read(storageServiceProvider);
+    final localUnlocked = await _readLocallyUnlocked(storage);
+    final lastVerifiedAt = await _readLastVerifiedAt(storage);
+    return PurchaseState(
+      isConfigured: _configured,
+      isUnlocked: localUnlocked,
+      freeServerLimit: RevenueCatConfig.freeServerLimit,
+      entitlementId: RevenueCatConfig.entitlementId,
+      verificationStatus: localUnlocked
+          ? PurchaseVerificationStatus.localOnly
+          : PurchaseVerificationStatus.unverified,
+      lastVerifiedAt: lastVerifiedAt,
+    );
+  }
+
+  Future<PurchaseState> maybeRefreshEntitlementAfterFirstFrame() async {
+    final current = state.valueOrNull ?? await _loadLocalState();
+    if (state.valueOrNull == null) {
+      state = AsyncValue.data(current);
+    }
+    if (!current.isUnlocked || !_needsEntitlementRefresh(current)) {
+      return current;
+    }
+    return refreshEntitlement(force: false);
+  }
+
+  Future<PurchaseState> refresh() => refreshEntitlement();
+
+  Future<PurchaseState> refreshEntitlement({bool force = true}) {
+    final current = state.valueOrNull;
+    if (!force &&
+        current != null &&
+        (!current.isUnlocked || !_needsEntitlementRefresh(current))) {
+      return Future.value(current);
+    }
+
+    final pending = _entitlementRefreshFuture;
+    if (pending != null) return pending;
+
+    final future = _refreshEntitlementInternal(force: force);
+    _entitlementRefreshFuture = future;
+    return future.whenComplete(() {
+      if (identical(_entitlementRefreshFuture, future)) {
+        _entitlementRefreshFuture = null;
+      }
+    });
+  }
+
+  Future<PurchaseState> _refreshEntitlementInternal({
+    required bool force,
+  }) async {
+    final current = state.valueOrNull ?? await _loadLocalState();
+    if (!force && !current.isUnlocked) return current;
+
     final l10n = ref.read(appLocalizationsProvider);
     final apiKey = RevenueCatConfig.apiKey;
     if (apiKey == null) {
-      final localUnlocked = _isLocallyUnlocked(ref);
-      return PurchaseState(
+      final next = current.copyWith(
         isConfigured: false,
-        isUnlocked: localUnlocked,
-        freeServerLimit: RevenueCatConfig.freeServerLimit,
-        entitlementId: RevenueCatConfig.entitlementId,
-        message: localUnlocked
-            ? l10n.purchases_offlineUnlocked
-            : l10n.purchases_apiKeyMissing,
+        verificationStatus: current.isUnlocked
+            ? PurchaseVerificationStatus.localOnly
+            : PurchaseVerificationStatus.unavailable,
+        message: current.isUnlocked ? null : l10n.purchases_apiKeyMissing,
+        clearMessage: current.isUnlocked,
       );
+      state = AsyncValue.data(next);
+      return next;
     }
 
     try {
-      await _configure(apiKey);
-    } catch (error) {
-      // SDK 初始化失败（极少见，比如平台不支持），完全无法走内购链路
-      AppLogger.w(_tag, 'Purchase service initialization failed: $error');
-      final localUnlocked = _isLocallyUnlocked(ref);
-      return PurchaseState(
-        isConfigured: false,
-        isUnlocked: localUnlocked,
-        freeServerLimit: RevenueCatConfig.freeServerLimit,
-        entitlementId: RevenueCatConfig.entitlementId,
-        message: localUnlocked
-            ? l10n.purchases_serviceUnavailableOfflineUnlocked
-            : l10n.purchases_serviceUnavailableNetwork,
+      await _ensureRevenueCatConfigured(apiKey);
+      final customerInfo = await _withRevenueCatReadTimeout(
+        rc.Purchases.getCustomerInfo(),
       );
-    }
-
-    // SDK 已就绪后再尝试拉取状态；离线/拉取失败仅影响展示，不影响后续恢复购买
-    try {
-      return await _loadState();
+      final next = await _stateFromCustomerInfo(customerInfo, current);
+      state = AsyncValue.data(next);
+      return next;
     } catch (error) {
-      AppLogger.w(_tag, 'Purchase state load failed: $error');
-      final localUnlocked = _isLocallyUnlocked(ref);
-      return PurchaseState(
-        isConfigured: true,
-        isUnlocked: localUnlocked,
-        freeServerLimit: RevenueCatConfig.freeServerLimit,
-        entitlementId: RevenueCatConfig.entitlementId,
-        message: localUnlocked
-            ? l10n.purchases_serviceUnavailableOfflineUnlocked
+      AppLogger.w(_tag, 'Purchase entitlement refresh failed: $error');
+      final next = current.copyWith(
+        isConfigured: _configured,
+        verificationStatus: current.isUnlocked
+            ? PurchaseVerificationStatus.localOnly
+            : PurchaseVerificationStatus.unavailable,
+        message: current.isUnlocked
+            ? null
             : l10n.purchases_serviceUnavailableNetwork,
+        clearMessage: current.isUnlocked,
       );
+      state = AsyncValue.data(next);
+      return next;
     }
   }
 
-  Future<PurchaseState> refresh() async {
-    state = const AsyncValue.loading();
-    final next = await _loadInitialState();
-    state = AsyncValue.data(next);
-    return next;
+  Future<PurchaseState> loadOfferings({bool force = false}) {
+    final current = state.valueOrNull;
+    final now = DateTime.now().toUtc();
+    final hasFreshAttempt =
+        _lastOfferingsAttemptAt != null &&
+        now.difference(_lastOfferingsAttemptAt!) < _offeringsRefreshInterval;
+    if (!force && current != null && hasFreshAttempt) {
+      return Future.value(current);
+    }
+
+    final pending = _offeringsFuture;
+    if (pending != null) return pending;
+
+    final future = _loadOfferingsInternal();
+    _offeringsFuture = future;
+    return future.whenComplete(() {
+      if (identical(_offeringsFuture, future)) {
+        _offeringsFuture = null;
+      }
+    });
+  }
+
+  Future<PurchaseState> _loadOfferingsInternal() async {
+    _lastOfferingsAttemptAt = DateTime.now().toUtc();
+    final current = state.valueOrNull ?? await _loadLocalState();
+    final l10n = ref.read(appLocalizationsProvider);
+    final apiKey = RevenueCatConfig.apiKey;
+    if (apiKey == null) {
+      final next = current.copyWith(
+        isConfigured: false,
+        hasPackage: false,
+        clearPriceText: true,
+        message: l10n.purchases_apiKeyMissing,
+      );
+      state = AsyncValue.data(next);
+      return next;
+    }
+
+    try {
+      await _ensureRevenueCatConfigured(apiKey);
+      final package = await _loadPurchasePackage();
+      _cachedPackage = package;
+      final next = current.copyWith(
+        isConfigured: true,
+        priceText: package?.storeProduct.priceString,
+        hasPackage: package != null,
+        clearPriceText: package == null,
+        message: package == null ? l10n.purchases_noPackageAvailable : null,
+        clearMessage: package != null,
+      );
+      state = AsyncValue.data(next);
+      return next;
+    } catch (error) {
+      AppLogger.w(_tag, 'Purchase package loading failed: $error');
+      final next = current.copyWith(
+        isConfigured: _configured,
+        hasPackage: false,
+        clearPriceText: true,
+        message: l10n.purchases_packageLoadFailed,
+      );
+      state = AsyncValue.data(next);
+      return next;
+    }
   }
 
   Future<PurchaseState> restorePurchases() async {
-    _ensureConfigured();
+    await _ensureRevenueCatConfiguredForUserAction();
     final customerInfo = await _withRevenueCatReadTimeout(
       rc.Purchases.restorePurchases(),
     );
-    final next = await _stateFromCustomerInfo(customerInfo);
+    final current = state.valueOrNull ?? await _loadLocalState();
+    final next = await _stateFromCustomerInfo(customerInfo, current);
     state = AsyncValue.data(next);
     return next;
   }
 
   Future<PurchaseState> purchaseUnlimitedServers() async {
-    _ensureConfigured();
-    final package = await _loadPurchasePackage();
+    await _ensureRevenueCatConfiguredForUserAction();
+    final package = _cachedPackage ?? await _loadPurchasePackage();
+    _cachedPackage = package;
     if (package == null) {
       throw PurchaseUnavailableException(
         ref.read(appLocalizationsProvider).purchases_noPackageAvailable,
@@ -210,7 +336,8 @@ class PurchaseController extends AsyncNotifier<PurchaseState> {
       final result = await rc.Purchases.purchase(
         rc.PurchaseParams.package(package),
       );
-      final next = await _stateFromCustomerInfo(result.customerInfo);
+      final current = state.valueOrNull ?? await _loadLocalState();
+      final next = await _stateFromCustomerInfo(result.customerInfo, current);
       state = AsyncValue.data(next);
       return next;
     } on PlatformException catch (error) {
@@ -222,63 +349,86 @@ class PurchaseController extends AsyncNotifier<PurchaseState> {
     }
   }
 
-  Future<void> _configure(String apiKey) async {
-    if (_configured) return;
-    await _withRevenueCatReadTimeout(
-      rc.Purchases.configure(rc.PurchasesConfiguration(apiKey)),
-    );
-    _configured = true;
-  }
-
-  Future<PurchaseState> _loadState() async {
-    try {
-      final customerInfo = await _withRevenueCatReadTimeout(
-        rc.Purchases.getCustomerInfo(),
-      );
-      return _stateFromCustomerInfo(customerInfo);
-    } catch (error) {
-      AppLogger.w(_tag, 'Purchase status refresh failed: $error');
-      final localUnlocked = _isLocallyUnlocked(ref);
-      if (!localUnlocked) rethrow;
-      return PurchaseState(
-        isConfigured: true,
-        isUnlocked: true,
-        freeServerLimit: RevenueCatConfig.freeServerLimit,
-        entitlementId: RevenueCatConfig.entitlementId,
-        message: ref
-            .read(appLocalizationsProvider)
-            .purchases_serviceUnavailableOfflineUnlocked,
+  Future<void> _ensureRevenueCatConfiguredForUserAction() async {
+    final apiKey = RevenueCatConfig.apiKey;
+    if (apiKey == null) {
+      throw PurchaseUnavailableException(
+        ref.read(appLocalizationsProvider).purchases_apiKeyMissing,
       );
     }
+    await _ensureRevenueCatConfigured(apiKey);
+  }
+
+  Future<void> _ensureRevenueCatConfigured(String apiKey) {
+    if (_configured) return Future.value();
+
+    final pending = _configureFuture;
+    if (pending != null) return pending;
+
+    final future =
+        _withRevenueCatReadTimeout(
+              rc.Purchases.configure(rc.PurchasesConfiguration(apiKey)),
+            )
+            .then((_) {
+              _configured = true;
+            })
+            .catchError((Object error) {
+              _configureFuture = null;
+              throw error;
+            });
+    _configureFuture = future;
+    return future;
+  }
+
+  bool _needsEntitlementRefresh(PurchaseState state) {
+    final lastVerifiedAt = state.lastVerifiedAt;
+    if (lastVerifiedAt == null) return true;
+    return DateTime.now().toUtc().difference(lastVerifiedAt.toUtc()) >=
+        _entitlementRefreshInterval;
+  }
+
+  Future<bool> _readLocallyUnlocked(StorageService storage) async {
+    final secureValue = await storage.getSecureString(_localUnlockKey);
+    if (secureValue != null) return secureValue == 'true';
+
+    return _migrateLegacyLocalUnlock(storage);
+  }
+
+  Future<bool> _migrateLegacyLocalUnlock(StorageService storage) async {
+    final legacyValue = storage.getString(_legacyLocalUnlockKey);
+    if (legacyValue == null) return false;
+
+    final unlocked = legacyValue == 'true';
+    await storage.setSecureString(_localUnlockKey, unlocked ? 'true' : 'false');
+    if (unlocked) {
+      await storage.setSecureString(
+        _lastVerifiedAtKey,
+        DateTime.now().toUtc().toIso8601String(),
+      );
+    }
+    return unlocked;
+  }
+
+  Future<DateTime?> _readLastVerifiedAt(StorageService storage) async {
+    final value = await storage.getSecureString(_lastVerifiedAtKey);
+    if (value == null || value.isEmpty) return null;
+    return DateTime.tryParse(value)?.toUtc();
   }
 
   Future<PurchaseState> _stateFromCustomerInfo(
     rc.CustomerInfo customerInfo,
+    PurchaseState current,
   ) async {
-    String? priceText;
-    var hasPackage = false;
-    String? message;
-
-    try {
-      final package = await _loadPurchasePackage();
-      priceText = package?.storeProduct.priceString;
-      hasPackage = package != null;
-    } catch (error) {
-      AppLogger.w(_tag, 'Purchase package loading failed: $error');
-      message = ref.read(appLocalizationsProvider).purchases_packageLoadFailed;
-    }
-
     final unlocked = _hasUnlimitedServers(customerInfo);
-    await _setLocallyUnlocked(unlocked);
+    final verifiedAt = DateTime.now().toUtc();
+    await _setLocallyUnlocked(unlocked, verifiedAt: verifiedAt);
 
-    return PurchaseState(
+    return current.copyWith(
       isConfigured: true,
       isUnlocked: unlocked,
-      freeServerLimit: RevenueCatConfig.freeServerLimit,
-      entitlementId: RevenueCatConfig.entitlementId,
-      priceText: priceText,
-      hasPackage: hasPackage,
-      message: message,
+      verificationStatus: PurchaseVerificationStatus.verified,
+      lastVerifiedAt: verifiedAt,
+      clearMessage: true,
     );
   }
 
@@ -301,28 +451,19 @@ class PurchaseController extends AsyncNotifier<PurchaseState> {
     return packages.isEmpty ? null : packages.first;
   }
 
-  void _ensureConfigured() {
-    final current = state.valueOrNull;
-    if (current == null || !current.isConfigured) {
-      throw PurchaseUnavailableException(
-        current?.message ??
-            ref.read(appLocalizationsProvider).purchases_serviceNotInitialized,
-      );
-    }
-  }
-
   static Future<T> _withRevenueCatReadTimeout<T>(Future<T> request) {
     return request.timeout(_revenueCatReadTimeout);
   }
 
-  static bool _isLocallyUnlocked(Ref ref) {
-    return ref.read(storageServiceProvider).getString(_localUnlockKey) ==
-        'true';
-  }
-
-  Future<void> _setLocallyUnlocked(bool value) {
-    return ref
-        .read(storageServiceProvider)
-        .setString(_localUnlockKey, value ? 'true' : 'false');
+  Future<void> _setLocallyUnlocked(
+    bool value, {
+    required DateTime verifiedAt,
+  }) async {
+    final storage = ref.read(storageServiceProvider);
+    await storage.setSecureString(_localUnlockKey, value ? 'true' : 'false');
+    await storage.setSecureString(
+      _lastVerifiedAtKey,
+      verifiedAt.toUtc().toIso8601String(),
+    );
   }
 }

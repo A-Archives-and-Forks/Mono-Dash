@@ -59,6 +59,20 @@ class StorageService {
     await _prefs.remove(key);
   }
 
+  // --- Secure State (Keychain / Keystore) ---
+
+  Future<String?> getSecureString(String key) async {
+    return _secureStorage.read(key: key);
+  }
+
+  Future<void> setSecureString(String key, String value) async {
+    await _secureStorage.write(key: key, value: value);
+  }
+
+  Future<void> removeSecureString(String key) async {
+    await _secureStorage.delete(key: key);
+  }
+
   // --- Servers (JSON) ---
 
   Future<List<Server>> getServers() async {

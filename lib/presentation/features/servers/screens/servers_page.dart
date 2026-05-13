@@ -137,15 +137,10 @@ class _ServersPageState extends ConsumerState<ServersPage> with RouteAware {
   Future<void> _handleAddServer() async {
     final servers = ref.read(serversNotifierProvider).valueOrNull ?? const [];
     final serverCount = servers.length;
-    final purchaseState = ref.read(purchaseControllerProvider).valueOrNull;
-    unawaited(_refreshPurchaseStateInBackground());
+    final purchaseState = await ref.read(purchaseControllerProvider.future);
     if (!mounted) return;
 
-    if (serverCount == 0 ||
-        PurchaseController.isLocallyUnlocked(ref) ||
-        (purchaseState?.canAddServer(serverCount) ??
-            (RevenueCatConfig.bypassServerLimitCheck ||
-                serverCount < RevenueCatConfig.freeServerLimit))) {
+    if (serverCount == 0 || purchaseState.canAddServer(serverCount)) {
       await AddServerSheet.show(context);
       return;
     }
@@ -155,14 +150,6 @@ class _ServersPageState extends ConsumerState<ServersPage> with RouteAware {
       ref,
       serverCount: serverCount,
     );
-  }
-
-  Future<void> _refreshPurchaseStateInBackground() async {
-    try {
-      await ref.read(purchaseControllerProvider.notifier).refresh();
-    } catch (_) {
-      // Purchase refresh failures are surfaced on the paywall retry state.
-    }
   }
 }
 

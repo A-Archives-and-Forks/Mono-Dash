@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -16,13 +18,30 @@ const _privacyPolicyUrl =
     'https://github.com/bin64/Mono-Dash/blob/main/PRIVACY.md';
 const _termsOfUseUrl = 'https://github.com/bin64/Mono-Dash/blob/main/TERMS.md';
 
-class PremiumPurchasePage extends ConsumerWidget {
+class PremiumPurchasePage extends ConsumerStatefulWidget {
   final bool isFromLimitPrompt;
 
   const PremiumPurchasePage({super.key, this.isFromLimitPrompt = false});
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<PremiumPurchasePage> createState() =>
+      _PremiumPurchasePageState();
+}
+
+class _PremiumPurchasePageState extends ConsumerState<PremiumPurchasePage> {
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      final purchaseState = ref.read(purchaseControllerProvider).valueOrNull;
+      if (purchaseState?.isUnlocked ?? false) return;
+      unawaited(ref.read(purchaseControllerProvider.notifier).loadOfferings());
+    });
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final l10n = context.l10n;
     final purchaseAsync = ref.watch(purchaseControllerProvider);
     final serverCount =
@@ -53,7 +72,7 @@ class PremiumPurchasePage extends ConsumerWidget {
                   l10n,
                   serverCount,
                   isUnlocked,
-                  isFromLimitPrompt,
+                  widget.isFromLimitPrompt,
                 ),
                 const SizedBox(height: 48),
                 if (!isUnlocked) ...[
@@ -210,9 +229,8 @@ class PremiumPurchasePage extends ConsumerWidget {
     AsyncValue<PurchaseState> purchaseAsync,
     AppLocalizations l10n,
   ) {
-    final purchaseState = purchaseAsync.valueOrNull;
     final canRestore =
-        !purchaseAsync.isLoading && (purchaseState?.isConfigured ?? false);
+        !purchaseAsync.isLoading && RevenueCatConfig.apiKey != null;
     return CupertinoButton(
       onPressed: canRestore ? () => _restorePurchases(ref) : null,
       child: Text(
@@ -385,7 +403,9 @@ class PremiumPurchasePage extends ConsumerWidget {
 
   Future<void> _retryPurchaseState(WidgetRef ref) async {
     try {
-      await ref.read(purchaseControllerProvider.notifier).refresh();
+      await ref
+          .read(purchaseControllerProvider.notifier)
+          .loadOfferings(force: true);
     } catch (error) {
       showAppErrorToast(
         ref.read(appLocalizationsProvider).common_loadingFailed,
