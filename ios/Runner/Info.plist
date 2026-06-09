@@ -44,6 +44,10 @@
 	<string>Use Face ID to unlock Mono Dash.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
 	<string>Select photos or files from your library to upload to a 1Panel panel.</string>
+	<key>NSCameraUsageDescription</key>
+	<string>Allow camera access to capture photos for upload or scan QR codes for quick connection setup.</string>
+	<key>NSLocationWhenInUseUsageDescription</key>
+	<string>Allow location access to detect nearby local network panel services.</string>
 	<key>NSSupportsLiveActivities</key>
 	<true/>
 	<key>UIApplicationSceneManifest</key>
