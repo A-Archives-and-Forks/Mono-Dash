@@ -78,7 +78,32 @@ class SettingApi {
       '/api/v2/core/settings/search',
       data: {},
     );
-    return resp.data?['data'] as Map<String, dynamic>? ?? {};
+    final raw = resp.data?['data'];
+    final settings = raw is Map<String, dynamic>
+        ? Map<String, dynamic>.from(raw)
+        : <String, dynamic>{};
+
+    try {
+      final current = await loadCurrentUser();
+      for (final key in const [
+        'apiInterfaceStatus',
+        'apiKey',
+        'ipWhiteList',
+        'apiKeyValidityTime',
+      ]) {
+        if (current.containsKey(key)) settings[key] = current[key];
+      }
+      final currentName = current['name']?.toString();
+      if ((settings['userName']?.toString().isEmpty ?? true) &&
+          currentName != null &&
+          currentName.isNotEmpty) {
+        settings['userName'] = currentName;
+      }
+    } catch (_) {
+      // Older 1Panel versions do not expose /core/auth/current.
+    }
+
+    return settings;
   }
 
   /// 更新 Core 侧面板配置。
@@ -123,7 +148,7 @@ class SettingApi {
         ApiEndpointVariant(
           name: 'core.auth.current.updatePassword',
           call: () async {
-            final user = await _loadCurrentUser();
+            final user = await loadCurrentUser();
             final name = user['name']?.toString() ?? '';
             await _client.post(
               '/api/v2/core/auth/current/update',
@@ -150,7 +175,7 @@ class SettingApi {
     );
   }
 
-  Future<Map<String, dynamic>> _loadCurrentUser() async {
+  Future<Map<String, dynamic>> loadCurrentUser() async {
     final resp = await _client.get<Map<String, dynamic>>(
       '/api/v2/core/auth/current',
     );
