@@ -3,6 +3,7 @@ import 'dart:typed_data';
 
 import 'package:dio/dio.dart';
 
+import '../../core/network/api_compatibility.dart';
 import '../../core/network/api_response_parser.dart';
 import '../../core/network/dio_client.dart';
 import '../dto/common/task_log_dto.dart';
@@ -82,8 +83,22 @@ class FileApi {
 
   /// 查询 OpenResty 网站根目录。
   Future<String> getWebsiteRootDir() async {
-    final resp = await _client.get<Map<String, dynamic>>(
-      '/api/v2/files/path/websiteDir',
+    final resp = await ApiCompatibility.tryVariants(
+      [
+        ApiEndpointVariant(
+          name: 'settings.website.dir',
+          call: () =>
+              _client.get<Map<String, dynamic>>('/api/v2/settings/website/dir'),
+        ),
+        ApiEndpointVariant(
+          name: 'files.path.websiteDir',
+          call: () => _client.get<Map<String, dynamic>>(
+            '/api/v2/files/path/websiteDir',
+          ),
+        ),
+      ],
+      cacheScope: _client,
+      cacheKey: 'files.websiteRootDir',
     );
     final data = resp.data?['data'];
     return data is String ? data : '';
@@ -103,21 +118,39 @@ class FileApi {
     String taskOperate = '',
     int resourceID = 0,
   }) async {
-    final resp = await _client.post<Map<String, dynamic>>(
-      '/api/v2/files/read',
-      query: const {'operateNode': 'local'},
-      data: {
-        if (id != 0) 'id': id,
-        'type': type,
-        if (name.isNotEmpty) 'name': name,
-        'page': page,
-        'pageSize': pageSize,
-        'latest': latest,
-        'taskID': taskID,
-        if (taskType.isNotEmpty) 'taskType': taskType,
-        if (taskOperate.isNotEmpty) 'taskOperate': taskOperate,
-        if (resourceID != 0) 'resourceID': resourceID,
-      },
+    final data = _readFilePayload(
+      id: id,
+      type: type,
+      name: name,
+      page: page,
+      pageSize: pageSize,
+      latest: latest,
+      taskID: taskID,
+      taskType: taskType,
+      taskOperate: taskOperate,
+      resourceID: resourceID,
+    );
+    final resp = await ApiCompatibility.tryVariants(
+      [
+        ApiEndpointVariant(
+          name: 'files.read.pathType',
+          call: () => _client.post<Map<String, dynamic>>(
+            '/api/v2/files/read/${Uri.encodeComponent(type)}',
+            query: const {'operateNode': 'local'},
+            data: data,
+          ),
+        ),
+        ApiEndpointVariant(
+          name: 'files.read.bodyType',
+          call: () => _client.post<Map<String, dynamic>>(
+            '/api/v2/files/read',
+            query: const {'operateNode': 'local'},
+            data: data,
+          ),
+        ),
+      ],
+      cacheScope: _client,
+      cacheKey: 'files.read',
     );
     return ApiResponseParser.object(resp, fromJson);
   }
@@ -130,17 +163,60 @@ class FileApi {
     int pageSize = 500,
     bool latest = false,
   }) async {
-    final resp = await _client.post<Map<String, dynamic>>(
-      '/api/v2/files/read',
-      data: {
-        'id': id,
-        'type': type,
-        'page': page,
-        'pageSize': pageSize,
-        'latest': latest,
-      },
+    final data = _readFilePayload(
+      id: id,
+      type: type,
+      page: page,
+      pageSize: pageSize,
+      latest: latest,
+    );
+    final resp = await ApiCompatibility.tryVariants(
+      [
+        ApiEndpointVariant(
+          name: 'files.readRuntime.pathType',
+          call: () => _client.post<Map<String, dynamic>>(
+            '/api/v2/files/read/${Uri.encodeComponent(type)}',
+            data: data,
+          ),
+        ),
+        ApiEndpointVariant(
+          name: 'files.readRuntime.bodyType',
+          call: () => _client.post<Map<String, dynamic>>(
+            '/api/v2/files/read',
+            data: data,
+          ),
+        ),
+      ],
+      cacheScope: _client,
+      cacheKey: 'files.readRuntimeLog',
     );
     return ApiResponseParser.object(resp, TaskLogDto.fromJson);
+  }
+
+  Map<String, dynamic> _readFilePayload({
+    required int id,
+    required String type,
+    String name = '',
+    required int page,
+    required int pageSize,
+    required bool latest,
+    String taskID = '',
+    String taskType = '',
+    String taskOperate = '',
+    int resourceID = 0,
+  }) {
+    return {
+      if (id != 0) ...{'id': id, 'ID': id},
+      'type': type,
+      if (name.isNotEmpty) 'name': name,
+      'page': page,
+      'pageSize': pageSize,
+      'latest': latest,
+      'taskID': taskID,
+      if (taskType.isNotEmpty) 'taskType': taskType,
+      if (taskOperate.isNotEmpty) 'taskOperate': taskOperate,
+      if (resourceID != 0) 'resourceID': resourceID,
+    };
   }
 
   /// 获取文件内容。
