@@ -644,6 +644,12 @@ class AppLocalizationsZh extends AppLocalizations {
   String get files_actionRemoveFavorite => '移除收藏';
 
   @override
+  String get files_favoritesTitle => '收藏夹';
+
+  @override
+  String get files_favoritesEmpty => '暂无收藏项目';
+
+  @override
   String get files_actionManageShare => '管理分享';
 
   @override

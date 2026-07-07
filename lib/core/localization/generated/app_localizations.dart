@@ -1262,6 +1262,18 @@ abstract class AppLocalizations {
   /// **'Remove Favorite'**
   String get files_actionRemoveFavorite;
 
+  /// Title for the file favorites sheet and menu item.
+  ///
+  /// In en, this message translates to:
+  /// **'Favorites'**
+  String get files_favoritesTitle;
+
+  /// Empty state for the file favorites sheet.
+  ///
+  /// In en, this message translates to:
+  /// **'No favorites yet'**
+  String get files_favoritesEmpty;
+
   /// Files context menu action to manage an existing share.
   ///
   /// In en, this message translates to:

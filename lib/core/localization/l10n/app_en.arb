@@ -919,6 +919,14 @@
   "@files_actionRemoveFavorite": {
     "description": "Files context menu action to remove an item from favorites."
   },
+  "files_favoritesTitle": "Favorites",
+  "@files_favoritesTitle": {
+    "description": "Title for the file favorites sheet and menu item."
+  },
+  "files_favoritesEmpty": "No favorites yet",
+  "@files_favoritesEmpty": {
+    "description": "Empty state for the file favorites sheet."
+  },
   "files_actionManageShare": "Manage Share",
   "@files_actionManageShare": {
     "description": "Files context menu action to manage an existing share."

@@ -648,6 +648,12 @@ class AppLocalizationsEn extends AppLocalizations {
   String get files_actionRemoveFavorite => 'Remove Favorite';
 
   @override
+  String get files_favoritesTitle => 'Favorites';
+
+  @override
+  String get files_favoritesEmpty => 'No favorites yet';
+
+  @override
   String get files_actionManageShare => 'Manage Share';
 
   @override

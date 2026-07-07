@@ -194,6 +194,8 @@
   "files_actionDecompress": "解压",
   "files_actionAddFavorite": "添加收藏",
   "files_actionRemoveFavorite": "移除收藏",
+  "files_favoritesTitle": "收藏夹",
+  "files_favoritesEmpty": "暂无收藏项目",
   "files_actionManageShare": "管理分享",
   "files_actionCreateShare": "创建分享链接",
   "files_actionCancelShare": "取消分享",

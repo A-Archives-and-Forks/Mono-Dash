@@ -7,6 +7,8 @@ import '../../core/network/api_compatibility.dart';
 import '../../core/network/api_response_parser.dart';
 import '../../core/network/dio_client.dart';
 import '../dto/common/task_log_dto.dart';
+import '../dto/common/page_result.dart';
+import '../dto/file/file_favorite_dto.dart';
 import '../dto/file/file_item_dto.dart';
 import '../dto/file/user_group_dto.dart';
 import '../dto/file/file_share_dto.dart';
@@ -305,6 +307,22 @@ class FileApi {
       '/api/v2/files/favorite/del',
       data: {'id': favoriteID},
     );
+  }
+
+  /// 查询收藏列表。
+  /// POST /api/v2/files/favorite/search
+  Future<PageResult<FileFavoriteDto>> searchFavorites({
+    int page = 1,
+    int pageSize = 1000,
+  }) async {
+    final resp = await _client.post<Map<String, dynamic>>(
+      '/api/v2/files/favorite/search',
+      data: {'page': page, 'pageSize': pageSize},
+    );
+    final data =
+        resp.data?['data'] as Map<String, dynamic>? ??
+        {'total': 0, 'items': []};
+    return PageResult.fromJson(data, FileFavoriteDto.fromJson);
   }
 
   /// 获取用户和用户组。
