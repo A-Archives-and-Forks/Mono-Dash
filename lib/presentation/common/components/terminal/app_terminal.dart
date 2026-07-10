@@ -527,6 +527,11 @@ class _TerminalShortcutToolbar extends StatelessWidget {
               onPressed: onPaste,
             ),
             _TerminalShortcutButton.text(
+              label: 'Enter',
+              enabled: enabled,
+              onPressed: () => onKey(TerminalKey.enter),
+            ),
+            _TerminalShortcutButton.text(
               label: 'Esc',
               enabled: enabled,
               onPressed: () => onKey(TerminalKey.escape),
