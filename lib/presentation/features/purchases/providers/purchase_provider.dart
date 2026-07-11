@@ -25,6 +25,7 @@ class RevenueCatConfig {
   static const offeringId = 'default';
   static const freeServerLimit = 1;
   static const bypassServerLimitCheck = false;
+  static const testFlightApiBaseUrl = 'https://testflight.dhcp.services';
 
   static String? get apiKey {
     if (kDebugMode) return _usableApiKey(testApiKey);
@@ -343,6 +344,12 @@ class PurchaseController extends AsyncNotifier<PurchaseState> {
       }
       rethrow;
     }
+  }
+
+  Future<String> revenueCatCustomerIdForTestFlight() async {
+    await _ensureRevenueCatConfiguredForUserAction();
+    await _withRevenueCatReadTimeout(rc.Purchases.getCustomerInfo());
+    return rc.Purchases.appUserID;
   }
 
   Future<void> _ensureRevenueCatConfiguredForUserAction() async {
