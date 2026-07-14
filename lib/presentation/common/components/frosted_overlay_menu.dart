@@ -3,7 +3,7 @@ import 'dart:math' as math;
 import 'package:flutter/cupertino.dart';
 import 'package:flutter_animate/flutter_animate.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 import '../../../../core/localization/l10n_x.dart';
 import '../../../../core/theme/app_theme.dart';
 import 'overlay_menu_mixin.dart';
@@ -286,8 +286,8 @@ class _FrostedOverlayMenuButtonState extends State<FrostedOverlayMenuButton>
         ),
         child: LiquidGlassLayer(
           settings: glassSettings,
-          fake: false,
-          child: LiquidGlass(
+          child: AdaptiveGlass.grouped(
+            quality: GlassQuality.premium,
             shape: const LiquidRoundedRectangle(borderRadius: 18),
             child: Builder(
               builder: (context) {

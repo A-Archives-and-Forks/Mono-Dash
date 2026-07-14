@@ -1,7 +1,7 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_animate/flutter_animate.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../core/theme/app_theme.dart';
 
@@ -90,8 +90,8 @@ class FloatingTabBar extends StatelessWidget {
           ),
           child: LiquidGlassLayer(
             settings: glassSettings,
-            fake: false,
-            child: LiquidGlass(
+            child: AdaptiveGlass.grouped(
+              quality: GlassQuality.premium,
               shape: const LiquidRoundedRectangle(borderRadius: 28),
               child: ClipRRect(
                 borderRadius: BorderRadius.circular(28),

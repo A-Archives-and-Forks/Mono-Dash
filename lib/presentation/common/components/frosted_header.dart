@@ -2,7 +2,7 @@ import 'dart:ui';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../../core/localization/l10n_x.dart';
 import '../../../../core/theme/app_theme.dart';
@@ -310,8 +310,8 @@ class _FrostedBackButton extends StatelessWidget {
         ),
         child: LiquidGlassLayer(
           settings: glassSettings,
-          fake: false,
-          child: LiquidGlass(
+          child: AdaptiveGlass.grouped(
+            quality: GlassQuality.premium,
             shape: const LiquidRoundedRectangle(borderRadius: _borderRadius),
             child: CustomPaint(
               foregroundPainter: swipeProgress > 0.01

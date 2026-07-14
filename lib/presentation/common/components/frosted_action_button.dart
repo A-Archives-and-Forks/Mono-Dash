@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../../core/theme/app_theme.dart';
 
@@ -17,7 +17,6 @@ class FrostedActionButton extends StatelessWidget {
     this.isDark = false,
     this.isOverlapping = false,
     this.isLoading = false,
-    this.showBlur = true,
     this.foregroundColor,
   });
 
@@ -27,7 +26,6 @@ class FrostedActionButton extends StatelessWidget {
   final bool isDark;
   final bool isOverlapping;
   final bool isLoading;
-  final bool showBlur;
   final Color? foregroundColor;
 
   bool get _isEnabled => onTap != null && !isLoading;
@@ -81,8 +79,8 @@ class FrostedActionButton extends StatelessWidget {
         ),
         child: LiquidGlassLayer(
           settings: glassSettings,
-          fake: !showBlur,
-          child: LiquidGlass(
+          child: AdaptiveGlass.grouped(
+            quality: GlassQuality.premium,
             shape: const LiquidRoundedRectangle(borderRadius: 18),
             child: _buildBody(context, containerColor, color),
           ),

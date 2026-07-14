@@ -1,6 +1,6 @@
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
-import 'package:liquid_glass_renderer/liquid_glass_renderer.dart';
+import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../../core/theme/app_theme.dart';
 
@@ -70,8 +70,8 @@ class FrostedFilterBar extends StatelessWidget {
         ),
         child: LiquidGlassLayer(
           settings: glassSettings,
-          fake: false,
-          child: LiquidGlass(
+          child: AdaptiveGlass.grouped(
+            quality: GlassQuality.premium,
             shape: const LiquidRoundedRectangle(borderRadius: 18),
             child: ClipRRect(
               borderRadius: BorderRadius.circular(18),

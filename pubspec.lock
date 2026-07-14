@@ -669,14 +669,14 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "6.1.0"
-  liquid_glass_renderer:
+  liquid_glass_widgets:
     dependency: "direct main"
     description:
-      name: liquid_glass_renderer
-      sha256: "789be157494b38cdef7607bb9b63e7fe3fab76fae16149e52fa313c2d858cb3f"
+      name: liquid_glass_widgets
+      sha256: a6a0cd3ee751ee16a72d4bafc2748591f2e7660d3a91ab58f68edea2aa2bff88
       url: "https://pub.dev"
     source: hosted
-    version: "0.2.0-dev.4"
+    version: "0.21.4"
   local_auth:
     dependency: "direct main"
     description:
@@ -773,14 +773,6 @@ packages:
       url: "https://pub.dev"
     source: hosted
     version: "3.0.0"
-  motor:
-    dependency: transitive
-    description:
-      name: motor
-      sha256: cbd49f21b00e568c2b1a55f134ed803614a107782f4fea7769693bca32940c58
-      url: "https://pub.dev"
-    source: hosted
-    version: "1.1.0"
   package_config:
     dependency: transitive
     description:
@@ -1396,4 +1388,4 @@ packages:
     version: "0.0.6"
 sdks:
   dart: ">=3.11.1 <4.0.0"
-  flutter: ">=3.38.0"
+  flutter: ">=3.41.0"
