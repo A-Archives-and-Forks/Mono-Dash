@@ -54,7 +54,7 @@ class FloatingTabBar extends StatelessWidget {
       frost: 1,
       glassColor: isDark
           ? const Color(0xFF2C2C2E).withValues(alpha: 0.42)
-          : const Color(0xFFE2E0D6).withValues(alpha: 0.55),
+          : const Color(0xFFE5E5EA).withValues(alpha: 0.55),
       lightIntensity: 76,
     );
 
@@ -107,7 +107,7 @@ class FloatingTabBar extends StatelessWidget {
                                     0xFF3A3A3C,
                                   ).withValues(alpha: 0.78)
                                 : const Color(
-                                    0xFFFAF9F6,
+                                    0xFFFFFFFF,
                                   ).withValues(alpha: 0.65),
                             border: Border.all(
                               color: isDark

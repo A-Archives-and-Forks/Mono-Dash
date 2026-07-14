@@ -68,7 +68,7 @@ class _FilePathBarState extends ConsumerState<FilePathBar> {
       frost: 1,
       glassColor: isDark
           ? const Color(0xFF2C2C2E).withValues(alpha: 0.42)
-          : const Color(0xFFE2E0D6).withValues(alpha: 0.55),
+          : const Color(0xFFE5E5EA).withValues(alpha: 0.55),
       lightIntensity: 76,
     );
 
@@ -103,7 +103,7 @@ class _FilePathBarState extends ConsumerState<FilePathBar> {
                       decoration: BoxDecoration(
                         color: isDark
                             ? const Color(0xFF3A3A3C).withValues(alpha: 0.78)
-                            : const Color(0xFFFAF9F6).withValues(alpha: 0.65),
+                            : const Color(0xFFFFFFFF).withValues(alpha: 0.65),
                         borderRadius: BorderRadius.circular(18),
                         border: Border.all(
                           color: isDark
