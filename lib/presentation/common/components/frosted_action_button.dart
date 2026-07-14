@@ -63,6 +63,26 @@ class FrostedActionButton extends StatelessWidget {
       lightIntensity: 76,
     );
 
+    if (text.isEmpty && icon != null && !isLoading) {
+      return GlassButton(
+        label: text,
+        icon: Icon(icon),
+        iconColor: color,
+        iconSize: 16,
+        width: 34,
+        height: 34,
+        settings: glassSettings,
+        quality: GlassQuality.premium,
+        useOwnLayer: true,
+        stretch: 0.15,
+        enabled: _isEnabled,
+        onTap: () {
+          HapticFeedback.lightImpact();
+          onTap?.call();
+        },
+      );
+    }
+
     return GestureDetector(
       onTap: _isEnabled
           ? () {
@@ -93,7 +113,8 @@ class FrostedActionButton extends StatelessWidget {
     return AnimatedContainer(
       duration: const Duration(milliseconds: 200),
       height: 34,
-      padding: const EdgeInsets.symmetric(horizontal: 14),
+      width: text.isEmpty ? 34 : null,
+      padding: EdgeInsets.symmetric(horizontal: text.isEmpty ? 0 : 14),
       decoration: BoxDecoration(
         color: containerColor,
         borderRadius: BorderRadius.circular(18),

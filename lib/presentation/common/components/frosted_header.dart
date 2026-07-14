@@ -1,17 +1,16 @@
-import 'dart:ui';
-
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
+import 'package:inspire_blur/inspire_blur.dart';
 import 'package:liquid_glass_widgets/liquid_glass_widgets.dart';
 
 import '../../../../core/localization/l10n_x.dart';
 import '../../../../core/theme/app_theme.dart';
 import '../../../../core/utils/format_utils.dart';
 
-/// Telegram-iOS 风格的透明磨砂导航栏
+/// 带真实渐进模糊的透明导航栏。
 ///
 /// 特点：
-/// - 磨砂玻璃背景（BackdropFilter），内容滚动时透过可见
+/// - GPU 渐进背景模糊，内容滚动时透过可见
 /// - 底部渐变淡出（无硬边界）
 /// - 独立悬浮返回按钮（自带小磨砂背景）
 /// - 居中标题
@@ -25,6 +24,7 @@ class FrostedHeader extends StatelessWidget {
   final Color? titleColor;
   final bool useMiddleTruncate;
   final Widget? titleWidget;
+  final double titleOpacity;
 
   const FrostedHeader({
     super.key,
@@ -37,6 +37,7 @@ class FrostedHeader extends StatelessWidget {
     this.titleColor,
     this.useMiddleTruncate = true,
     this.titleWidget,
+    this.titleOpacity = 1,
   });
 
   static const double headerHeight = 44.0;
@@ -57,11 +58,6 @@ class FrostedHeader extends StatelessWidget {
         ? leftAvoidance
         : rightAvoidance;
 
-    // 计算纯色/强模糊部分的比例
-    final solidRatio = totalHeight > 0
-        ? (contentHeight / totalHeight).clamp(0.0, 1.0)
-        : 1.0;
-
     // 根据重叠状态赋予样式
     final textColor = titleColor ?? AppColors.label(context);
     final textShadows = isOverlapping
@@ -79,46 +75,35 @@ class FrostedHeader extends StatelessWidget {
       height: totalHeight,
       child: Stack(
         children: [
-          // 1. 渐变磨砂玻璃层。
-          //
-          // BackdropFilter 才能模糊页面背后的内容；progressive_blur 是模糊
-          // 自己的 child，不适合作为透明 header 的背景模糊替代。
+          // 1. 与 Nezha-Dash 相同的 GPU 渐进背景模糊层。
           if (showBlur)
             Positioned.fill(
-              child: ShaderMask(
-                shaderCallback: (bounds) {
-                  return LinearGradient(
-                    begin: Alignment.topCenter,
-                    end: Alignment.bottomCenter,
-                    colors: const [
-                      Color(0xFFFFFFFF),
-                      Color(0xFFFFFFFF),
-                      Color(0x00FFFFFF),
-                    ],
-                    stops: [0.0, solidRatio, 1.0],
-                  ).createShader(bounds);
-                },
-                blendMode: BlendMode.dstIn,
-                child: ClipRect(
-                  child: BackdropFilter(
-                    filter: ImageFilter.blur(sigmaX: 30, sigmaY: 30),
-                    child: Container(
+              child: RepaintBoundary(
+                child: IgnorePointer(
+                  child: InspireBackdropBlur(
+                    config: InspireBlurConfig.topToBottom(
+                      sigma: 12,
+                      fadeCurve: Curves.easeInSine,
+                      extent: 1,
+                    ),
+                    child: DecoratedBox(
                       decoration: BoxDecoration(
                         gradient: LinearGradient(
                           begin: Alignment.topCenter,
                           end: Alignment.bottomCenter,
                           colors: [
-                            isDark
-                                ? const Color(
-                                    0xFF1C1C1E,
-                                  ).withValues(alpha: 0.85)
-                                : CupertinoColors.white.withValues(alpha: 0.85),
-                            isDark
-                                ? const Color(0xFF1C1C1E).withValues(alpha: 0.1)
-                                : CupertinoColors.white.withValues(alpha: 0.1),
+                            (isDark
+                                    ? CupertinoColors.black
+                                    : CupertinoColors.white)
+                                .withValues(alpha: 0.10),
+                            (isDark
+                                    ? CupertinoColors.black
+                                    : CupertinoColors.white)
+                                .withValues(alpha: 0),
                           ],
                         ),
                       ),
+                      child: const SizedBox.expand(),
                     ),
                   ),
                 ),
@@ -133,36 +118,40 @@ class FrostedHeader extends StatelessWidget {
             height: headerHeight,
             child: Padding(
               padding: EdgeInsets.symmetric(horizontal: horizontalPadding),
-              child: Center(
-                child:
-                    titleWidget ??
-                    LayoutBuilder(
-                      builder: (context, constraints) {
-                        var displayTitle = title;
-                        if (useMiddleTruncate) {
-                          // 更保守的估算：考虑宽字符和内边距，平均每个字符预留 11 像素
-                          final maxChars = (constraints.maxWidth / 11.0)
-                              .floor();
-                          displayTitle = truncateMiddle(title, maxChars);
-                        }
+              child: Opacity(
+                key: const ValueKey('frosted-small-title'),
+                opacity: titleOpacity,
+                child: Center(
+                  child:
+                      titleWidget ??
+                      LayoutBuilder(
+                        builder: (context, constraints) {
+                          var displayTitle = title;
+                          if (useMiddleTruncate) {
+                            // 更保守的估算：考虑宽字符和内边距，平均每个字符预留 11 像素
+                            final maxChars = (constraints.maxWidth / 11.0)
+                                .floor();
+                            displayTitle = truncateMiddle(title, maxChars);
+                          }
 
-                        return AnimatedDefaultTextStyle(
-                          duration: const Duration(milliseconds: 200),
-                          style: TextStyle(
-                            fontSize: 17,
-                            fontWeight: FontWeight.w600,
-                            color: textColor,
-                            letterSpacing: -0.4,
-                            shadows: textShadows,
-                          ),
-                          child: Text(
-                            displayTitle,
-                            maxLines: 1,
-                            overflow: TextOverflow.ellipsis,
-                          ),
-                        );
-                      },
-                    ),
+                          return AnimatedDefaultTextStyle(
+                            duration: const Duration(milliseconds: 200),
+                            style: TextStyle(
+                              fontSize: 17,
+                              fontWeight: FontWeight.w600,
+                              color: textColor,
+                              letterSpacing: -0.4,
+                              shadows: textShadows,
+                            ),
+                            child: Text(
+                              displayTitle,
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          );
+                        },
+                      ),
+                ),
               ),
             ),
           ),
