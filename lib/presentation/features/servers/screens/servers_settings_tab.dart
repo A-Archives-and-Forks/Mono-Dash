@@ -1,4 +1,5 @@
 import 'dart:io';
+import 'package:mono_dash/core/widgets/app_toggle_switch.dart';
 
 import 'package:flutter/cupertino.dart';
 import 'package:flutter/services.dart';
@@ -1272,7 +1273,7 @@ class _SettingsSwitchRow extends StatelessWidget {
             ),
           ),
           const SizedBox(width: 12),
-          CupertinoSwitch(value: value, onChanged: onChanged),
+          AppToggleSwitch(value: value, onChanged: onChanged),
         ],
       ),
     );

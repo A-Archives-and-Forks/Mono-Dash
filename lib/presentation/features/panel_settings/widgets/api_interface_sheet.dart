@@ -1,4 +1,5 @@
 import 'package:flutter/cupertino.dart';
+import 'package:mono_dash/core/widgets/app_toggle_switch.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_tabler_icons/flutter_tabler_icons.dart';
@@ -140,7 +141,7 @@ class _ApiInterfaceSheetState extends ConsumerState<_ApiInterfaceSheet> {
             AppActionRow(
               title: context.l10n.panelSettings_enableApi,
               subtitle: Text(context.l10n.panelSettings_enableApiSubtitle),
-              trailing: CupertinoSwitch(value: _enabled, onChanged: null),
+              trailing: AppToggleSwitch(value: _enabled, onChanged: null),
             ),
           ],
         ),
