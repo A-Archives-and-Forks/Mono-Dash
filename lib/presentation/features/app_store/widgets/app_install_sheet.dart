@@ -215,27 +215,31 @@ class _AppInstallSheetState extends ConsumerState<_AppInstallSheet> {
 
   @override
   Widget build(BuildContext context) {
-    return SafeArea(
-      top: false,
-      bottom: false,
-      child: Container(
-        height: MediaQuery.sizeOf(context).height * 0.9,
-        decoration: BoxDecoration(
-          color: AppColors.background(context),
-          borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-        ),
-        child: Column(
-          children: [
-            _buildHandle(),
-            _buildHeader(),
-            Expanded(
-              child: _loading
-                  ? const Center(child: CupertinoActivityIndicator())
-                  : _error != null
-                  ? _buildError()
-                  : _buildForm(),
-            ),
-          ],
+    return AnimatedPadding(
+      duration: const Duration(milliseconds: 200),
+      padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(context).bottom),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Container(
+          height: MediaQuery.sizeOf(context).height * 0.9,
+          decoration: BoxDecoration(
+            color: AppColors.background(context),
+            borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+          ),
+          child: Column(
+            children: [
+              _buildHandle(),
+              _buildHeader(),
+              Expanded(
+                child: _loading
+                    ? const Center(child: CupertinoActivityIndicator())
+                    : _error != null
+                    ? _buildError()
+                    : _buildForm(),
+              ),
+            ],
+          ),
         ),
       ),
     );
